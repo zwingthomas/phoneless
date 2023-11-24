@@ -7,8 +7,6 @@ const App = () => {
   const startTimeRef = useRef(Date.now());
 
   useEffect(() => {
-    console.log('App useEffect run');
-    
     const eventEmitter = new NativeEventEmitter(NativeModules.LockUnlockEventsEmitter);
 
     const lockListener = eventEmitter.addListener('lock', () => {
@@ -28,7 +26,6 @@ const App = () => {
     return () => {
       lockListener.remove();
       unlockListener.remove();
-      console.log("test")
     };
   }, []);
 
