@@ -1,39 +1,226 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { SafeAreaView, Text, NativeEventEmitter, NativeModules } from 'react-native';
+import { SafeAreaView, Text, View, Image, TouchableOpacity, StyleSheet, NativeEventEmitter, NativeModules } from 'react-native';
+import { Picker } from '@react-native-picker/picker';
 
 const App = () => {
   const [timer, setTimer] = useState(0);
+  const [secondTimer, setSecondTimer] = useState(0);
+  const [running, setRunning] = useState(false);
   const [isLocked, setIsLocked] = useState(false);
   const startTimeRef = useRef(Date.now());
+  const secondTimerIntervalRef = useRef<number | null>(null);
+  const [showSettings, setShowSettings] = useState(false);
+  const [number1, setNumber1] = useState(0); // Default value for number 1
+  const [number2, setNumber2] = useState(0); // Default value for number 2
 
   useEffect(() => {
     const eventEmitter = new NativeEventEmitter(NativeModules.LockUnlockEventsEmitter);
 
     const lockListener = eventEmitter.addListener('lock', () => {
-      console.log('Lock event received');
-      setIsLocked(true);
-      startTimeRef.current = Date.now(); // Store the lock time in the ref
+      console.log(`Running: ${running}`);
+      console.log("lock event recieved")
+      if (running) {
+        setIsLocked(true);
+        startTimeRef.current = Date.now(); // Store the lock time in the ref
+      }
     });
 
     const unlockListener = eventEmitter.addListener('unlock', () => {
-      console.log('Unlock event received');
-      const lockedDuration = (Date.now() - startTimeRef.current) / 1000; // Calculate the duration using the ref
-      console.log(`Locked duration: ${lockedDuration} seconds`);
-      setIsLocked(false);
-      setTimer((currentTimer) => currentTimer + lockedDuration); // Use the functional update to ensure the latest timer value is used
+      console.log(`Running: ${running}`);
+      console.log("unlock event recieved")
+      if (running) {
+        const lockedDuration = (Date.now() - startTimeRef.current) / 1000; // Calculate the duration using the ref
+        console.log(`Locked Duration: ${lockedDuration} seconds`); 
+        setTimer((currentTimer) => {
+          const newTimer = currentTimer + lockedDuration;
+          console.log(`Timer is now: ${newTimer}`);
+          return newTimer;
+        });// Use the functional update to ensure the latest timer value is used
+      }
     });
 
     return () => {
       lockListener.remove();
       unlockListener.remove();
     };
+  }, [running]);
+
+  useEffect(() => {
+    console.log(`Timer updated to: ${timer} seconds`);
+  }, [timer]);
+
+  const handleStartPress = () => {
+    setRunning(true);
+    console.log(`Running: ${running}`)
+    setSecondTimer(0); // Reset the second timer
+    // Start the second timer
+    secondTimerIntervalRef.current = setInterval(() => {
+      setSecondTimer(t =>  t + 1);
+    }, 1000) as unknown as number; // Cast to number, which is the expected type in React Native
+  };
+
+  useEffect(() => {
+    console.log(`Running updated to: ${running}`);
+  }, [running]);
+
+  const isWinner = timer >= 30 && secondTimer < 60;
+
+  useEffect(() => {
+    // Stop counting up once they win
+    return () => {
+      if (secondTimerIntervalRef.current !== null) {
+        clearInterval(secondTimerIntervalRef.current);
+      }
+    };
+  }, [isWinner]);
+
+  useEffect(() => {
+    // Clear interval on unmount or other cleanup conditions
+    return () => {
+      if (secondTimerIntervalRef.current !== null) {
+        clearInterval(secondTimerIntervalRef.current);
+      }
+    };
   }, []);
 
+  const formatTime = (totalSeconds: number) => {
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+
+    const formattedHours = String(hours).padStart(2, '0');
+    const formattedMinutes = String(minutes).padStart(2, '0');
+    const formattedSeconds = String(seconds).padStart(2, '0');
+
+    return `${formattedHours}:${formattedMinutes}:${formattedSeconds}`;
+  };
+
+  const handleResetPress = () => {
+    // Reset both timers
+    setTimer(0);
+    setSecondTimer(0);
+    setRunning(false); // Show the Start button again
+    // Clear the second timer interval if it's running
+    if (secondTimerIntervalRef.current !== null) {
+      clearInterval(secondTimerIntervalRef.current);
+      secondTimerIntervalRef.current = null;
+    }
+  };
+
   return (
-    <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-      <Text>Time Phone Was Locked: {isLocked ? "Locked..." : `${timer.toFixed(2)} seconds`}</Text>
+    <SafeAreaView style={styles.container}>
+      <TouchableOpacity style={styles.settingsButton} onPress={() => setShowSettings(!showSettings)}>
+        <Text style={styles.buttonText}>Settings</Text>
+      </TouchableOpacity>
+
+      {!running && (
+        <TouchableOpacity style={styles.button} onPress={handleStartPress}>
+          <Text style={styles.buttonText}>Start</Text>
+        </TouchableOpacity>
+      )}
+
+      {showSettings && (
+        <View style={styles.settingsDropdown}>
+          <View style={styles.pickerContainer}>
+            <View style={styles.pickerWrapper}>
+              <Text>Select Number 1:</Text>
+              <Picker
+                selectedValue={number1}
+                style={styles.picker}
+                onValueChange={(itemValue) => setNumber1(itemValue)}>
+                {[...Array(10).keys()].map((num) => (
+                  <Picker.Item key={num} label={`${num}`} value={num} />
+                ))}
+              </Picker>
+            </View>
+
+            <View style={styles.pickerWrapper}>
+              <Text>Select Number 2:</Text>
+              <Picker
+                selectedValue={number2}
+                style={styles.picker}
+                onValueChange={(itemValue) => setNumber2(itemValue)}>
+                {[...Array(10).keys()].map((num) => (
+                  <Picker.Item key={num} label={`${num}`} value={num} />
+                ))}
+              </Picker>
+            </View>
+          </View>
+        </View>
+      )}
+      <TouchableOpacity style={styles.button} onPress={handleResetPress}>
+        <Text style={styles.buttonText}>Reset</Text>
+      </TouchableOpacity>
+      <Text>Time Phone Was Locked: {Math.floor(timer)}</Text>
+      <Text>Second Timer: {secondTimer} seconds</Text>
+      {isWinner && <Image source={require('./winner.webp')} style={styles.winnerImage} />}
     </SafeAreaView>
   );
 };
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 10, // Add some padding around the SafeAreaView
+  },
+  button: {
+    backgroundColor: '#007bff', // A blue background color for the button
+    width: '100%', // Full width
+    height: 160, // Approximating an inch tall, adjust as necessary
+    justifyContent: 'center', // Center the text vertically
+    alignItems: 'center', // Center the text horizontally
+    marginBottom: 10, // Space between buttons
+  },
+  buttonText: {
+    color: 'white', // White text for better contrast
+    fontSize: 20, // Larger text
+  },
+  winnerImage: {
+    width: 300, // Set the width and height according to your image
+    height: 300,
+    resizeMode: 'contain',
+  },
+  settingsButton: {
+    position: 'absolute',
+    top: 50,
+    right: 10,
+    backgroundColor: '#007bff', // Ensure it's visible
+    padding: 10, // Adjust size
+    zIndex: 10, // Ensure it's on top
+    borderWidth: 1, // For debugging
+    borderColor: 'red', // For debugging
+  },
+  settingsDropdown: {
+    position: 'absolute',
+    top: '10%',  // Adjust as needed for vertical positioning
+    left: '5%',  // Adjust as needed for horizontal positioning
+    width: '90%', // Takes up 90% of the screen width
+    height: '80%', // Takes up 80% of the screen height
+    backgroundColor: 'white', // Or any color that fits your app's theme
+    padding: 20,
+    zIndex: 2,  // Ensures it's above other components
+    borderRadius: 10, // Optional for rounded corners
+    elevation: 5,  // Optional for Android shadow
+    shadowColor: '#000',  // Optional for iOS shadow
+    shadowOffset: { width: 0, height: 2 },  // Optional for iOS shadow
+    shadowOpacity: 0.25,  // Optional for iOS shadow
+    shadowRadius: 3.84,  // Optional for iOS shadow
+  },
+  pickerContainer: {
+    flexDirection: 'row', // Aligns children side by side
+    justifyContent: 'space-around', // Evenly spaces the children
+    width: '100%', // Full width of the dropdown
+  },
+  pickerWrapper: {
+    flex: 1, // Each picker takes up equal space
+    alignItems: 'center', // Center align the picker and text
+  },
+  picker: {
+    width: '100%', // Adjust as necessary
+    // Other styles for the picker
+  },
+});
 
 export default App;
