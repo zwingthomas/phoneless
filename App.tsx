@@ -1,17 +1,26 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { SafeAreaView, Text, View, Image, TouchableOpacity, StyleSheet, NativeEventEmitter, NativeModules } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
+import PushNotificationIOS from '@react-native-community/push-notification-ios';
 
 const App = () => {
+
+  PushNotificationIOS.requestPermissions()
+
   const [timer, setTimer] = useState(0);
   const [secondTimer, setSecondTimer] = useState(0);
+  const [winTime, setWinTime] = useState(0);
+  const [loseTime, setLoseTime] = useState(0);
   const [running, setRunning] = useState(false);
   const [isLocked, setIsLocked] = useState(false);
-  const startTimeRef = useRef(Date.now());
+  const lockedTimeRef = useRef(Date.now());
+  const startTimeRef = useRef(Date.now())
   const secondTimerIntervalRef = useRef<number | null>(null);
   const [showSettings, setShowSettings] = useState(false);
-  const [number1, setNumber1] = useState(0); // Default value for number 1
-  const [number2, setNumber2] = useState(0); // Default value for number 2
+  const [lockGoal, setLockGoal] = useState(0); // Default value for number 1
+  const [lockGrace, setLockGrace] = useState(0); // Default value for number 2
+  const [isWinner, setIsWinner] = useState(false);
+  const [isLoser, setIsLoser] = useState(false);
 
   useEffect(() => {
     const eventEmitter = new NativeEventEmitter(NativeModules.LockUnlockEventsEmitter);
@@ -21,7 +30,21 @@ const App = () => {
       console.log("lock event recieved")
       if (running) {
         setIsLocked(true);
-        startTimeRef.current = Date.now(); // Store the lock time in the ref
+        PushNotificationIOS.removePendingNotificationRequests(["loseTime"]);
+        lockedTimeRef.current = Date.now(); // Store the lock time in the ref
+        if (lockedTimeRef.current > startTimeRef.current + ((lockGoal * 60) + (lockGrace * 60)) * 1000){
+          setIsLoser(true)
+        }
+        else{
+          // Set the win time by clock as well and notify them if they reach that time
+          setWinTime(lockedTimeRef.current + ((lockGoal * 60 - timer) * 1000))
+          PushNotificationIOS.addNotificationRequest({
+            id: "winTime",
+            title: "You won!",
+            body: "Congrats on putting your phone down!",
+            fireDate: new Date(winTime),
+          });
+        }
       }
     });
 
@@ -29,11 +52,25 @@ const App = () => {
       console.log(`Running: ${running}`);
       console.log("unlock event recieved")
       if (running) {
-        const lockedDuration = (Date.now() - startTimeRef.current) / 1000; // Calculate the duration using the ref
+        PushNotificationIOS.removePendingNotificationRequests(["winTime"]);
+        const lockedDuration = (Date.now() - lockedTimeRef.current) / 1000; // Calculate the duration using the ref
         console.log(`Locked Duration: ${lockedDuration} seconds`); 
         setTimer((currentTimer) => {
           const newTimer = currentTimer + lockedDuration;
           console.log(`Timer is now: ${newTimer}`);
+          if (newTimer >= (lockGoal * 60)) {
+            setIsWinner(true)
+          }
+          else{
+            // Set the win time by clock as well and notify them if they reach that time
+            setLoseTime(lockedTimeRef.current + ((lockGoal * 60  + lockGrace * 60 - timer) * 1000))
+            PushNotificationIOS.addNotificationRequest({
+              id: "loseTime",
+              title: "You lose!",
+              body: "Put your damn phone down!",
+              fireDate: new Date(winTime),
+            });
+          }
           return newTimer;
         });// Use the functional update to ensure the latest timer value is used
       }
@@ -43,7 +80,7 @@ const App = () => {
       lockListener.remove();
       unlockListener.remove();
     };
-  }, [running]);
+  }, [running, startTimeRef, lockGoal, lockGrace]);
 
   useEffect(() => {
     console.log(`Timer updated to: ${timer} seconds`);
@@ -52,6 +89,7 @@ const App = () => {
   const handleStartPress = () => {
     setRunning(true);
     console.log(`Running: ${running}`)
+    startTimeRef.current = Date.now();
     setSecondTimer(0); // Reset the second timer
     // Start the second timer
     secondTimerIntervalRef.current = setInterval(() => {
@@ -62,8 +100,6 @@ const App = () => {
   useEffect(() => {
     console.log(`Running updated to: ${running}`);
   }, [running]);
-
-  const isWinner = timer >= 30 && secondTimer < 60;
 
   useEffect(() => {
     // Stop counting up once they win
@@ -83,23 +119,29 @@ const App = () => {
     };
   }, []);
 
-  const formatTime = (totalSeconds: number) => {
-    const hours = Math.floor(totalSeconds / 3600);
-    const minutes = Math.floor((totalSeconds % 3600) / 60);
-    const seconds = totalSeconds % 60;
+  // const formatTime = (totalSeconds: number) => {
+  //   const hours = Math.floor(totalSeconds / 3600);
+  //   const minutes = Math.floor((totalSeconds % 3600) / 60);
+  //   const seconds = totalSeconds % 60;
 
-    const formattedHours = String(hours).padStart(2, '0');
-    const formattedMinutes = String(minutes).padStart(2, '0');
-    const formattedSeconds = String(seconds).padStart(2, '0');
+  //   const formattedHours = String(hours).padStart(2, '0');
+  //   const formattedMinutes = String(minutes).padStart(2, '0');
+  //   const formattedSeconds = String(seconds).padStart(2, '0');
 
-    return `${formattedHours}:${formattedMinutes}:${formattedSeconds}`;
-  };
+  //   return `${formattedHours}:${formattedMinutes}:${formattedSeconds}`;
+  // };
+
+
 
   const handleResetPress = () => {
     // Reset both timers
     setTimer(0);
     setSecondTimer(0);
-    setRunning(false); // Show the Start button again
+    setRunning(false); 
+    setIsWinner(false);
+    setIsLoser(false);
+    // Show the Start button again
+    PushNotificationIOS.removeDeliveredNotifications(["winTime", "loseTime"]);
     // Clear the second timer interval if it's running
     if (secondTimerIntervalRef.current !== null) {
       clearInterval(secondTimerIntervalRef.current);
@@ -123,24 +165,24 @@ const App = () => {
         <View style={styles.settingsDropdown}>
           <View style={styles.pickerContainer}>
             <View style={styles.pickerWrapper}>
-              <Text>Select Number 1:</Text>
+              <Text>Goal Minutes:</Text>
               <Picker
-                selectedValue={number1}
+                selectedValue={lockGoal}
                 style={styles.picker}
-                onValueChange={(itemValue) => setNumber1(itemValue)}>
-                {[...Array(10).keys()].map((num) => (
+                onValueChange={(itemValue) => setLockGoal(itemValue)}>
+                {[...Array(600).keys()].map((num) => (
                   <Picker.Item key={num} label={`${num}`} value={num} />
                 ))}
               </Picker>
             </View>
 
             <View style={styles.pickerWrapper}>
-              <Text>Select Number 2:</Text>
+              <Text>Grace Time:</Text>
               <Picker
-                selectedValue={number2}
+                selectedValue={lockGrace}
                 style={styles.picker}
-                onValueChange={(itemValue) => setNumber2(itemValue)}>
-                {[...Array(10).keys()].map((num) => (
+                onValueChange={(itemValue) => setLockGrace(itemValue)}>
+                {[...Array(60).keys()].map((num) => (
                   <Picker.Item key={num} label={`${num}`} value={num} />
                 ))}
               </Picker>
