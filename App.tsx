@@ -37,12 +37,11 @@ const App = () => {
         }
         else{
           // Set the win time by clock as well and notify them if they reach that time
-          setWinTime(lockedTimeRef.current + ((lockGoal * 60 - timer) * 1000))
           PushNotificationIOS.addNotificationRequest({
             id: "winTime",
             title: "You won!",
             body: "Congrats on putting your phone down!",
-            fireDate: new Date(winTime),
+            fireDate: new Date(startTimeRef.current + (lockGoal * 60 * 1000)),
           });
         }
       }
@@ -61,14 +60,16 @@ const App = () => {
           if (newTimer >= (lockGoal * 60)) {
             setIsWinner(true)
           }
+          else if (lockedTimeRef.current > startTimeRef.current + ((lockGoal * 60) + (lockGrace * 60)) * 1000){
+            setIsLoser(true)
+          }
           else{
             // Set the win time by clock as well and notify them if they reach that time
-            setLoseTime(lockedTimeRef.current + ((lockGoal * 60  + lockGrace * 60 - timer) * 1000))
             PushNotificationIOS.addNotificationRequest({
               id: "loseTime",
               title: "You lose!",
-              body: "Put your damn phone down!",
-              fireDate: new Date(winTime),
+              body: "Put your darn phone down!",
+              fireDate: new Date(Date.now() + (((lockGoal * 60 + lockGrace * 60) - newTimer) * 1000)),
             });
           }
           return newTimer;
