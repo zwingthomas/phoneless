@@ -169,7 +169,7 @@ const App = () => {
         <View style={styles.settingsDropdown}>
           <View style={styles.pickerContainer}>
             <View style={styles.pickerWrapper}>
-              <Text>Goal Minutes:</Text>
+              <Text>Goal Seconds:</Text>
               <Picker
                 selectedValue={lockGoal}
                 style={styles.picker}
