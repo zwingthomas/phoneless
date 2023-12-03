@@ -32,7 +32,7 @@ const App = () => {
         setIsLocked(true);
         PushNotificationIOS.removePendingNotificationRequests(["loseTime"]);
         lockedTimeRef.current = Date.now(); // Store the lock time in the ref
-        if (lockedTimeRef.current > startTimeRef.current + ((lockGoal * 60) + (lockGrace * 60)) * 1000){
+        if (lockedTimeRef.current > startTimeRef.current + ((lockGoal) + (lockGrace)) * 1000){
           setIsLoser(true)
         }
         else{
@@ -41,7 +41,7 @@ const App = () => {
             id: "winTime",
             title: "You won!",
             body: "Congrats on putting your phone down!",
-            fireDate: new Date(startTimeRef.current + (lockGoal * 60 * 1000)),
+            fireDate: new Date(startTimeRef.current + (lockGoal * 1000)),
           });
         }
       }
@@ -57,10 +57,10 @@ const App = () => {
         setTimer((currentTimer) => {
           const newTimer = currentTimer + lockedDuration;
           console.log(`Timer is now: ${newTimer}`);
-          if (newTimer >= (lockGoal * 60)) {
+          if (newTimer >= (lockGoal)) {
             setIsWinner(true)
           }
-          else if (lockedTimeRef.current > startTimeRef.current + ((lockGoal * 60) + (lockGrace * 60)) * 1000){
+          else if (lockedTimeRef.current > startTimeRef.current + ((lockGoal) + (lockGrace)) * 1000){
             setIsLoser(true)
           }
           else{
@@ -69,7 +69,7 @@ const App = () => {
               id: "loseTime",
               title: "You lose!",
               body: "Put your darn phone down!",
-              fireDate: new Date(Date.now() + (((lockGoal * 60 + lockGrace * 60) - newTimer) * 1000)),
+              fireDate: new Date(Date.now() + (((lockGoal + lockGrace) - newTimer) * 1000)),
             });
           }
           return newTimer;
