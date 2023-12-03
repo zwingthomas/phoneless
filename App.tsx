@@ -69,7 +69,10 @@ const App = () => {
               id: "loseTime",
               title: "You lose!",
               body: "Put your darn phone down!",
-              fireDate: new Date(Date.now() + (((lockGoal + lockGrace) - newTimer) * 1000)),
+              // Now + Grace time remaining
+              // Now + (lockGrace - (total time elapsed [start time - now] - total locked time elapsed))
+              //                  Now       +   total grace time  - total unlocked time  
+              fireDate: new Date(Date.now() + ((lockGrace * 1000) - (startTimeRef.current - Date.now() - (newTimer * 1000)))),
             });
           }
           return newTimer;
