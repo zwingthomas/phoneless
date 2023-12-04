@@ -27,25 +27,27 @@ const App = () => {
     const lockListener = eventEmitter.addListener('lock', () => {
       console.log(`Running: ${running}`);
       console.log("lock event recieved")
-      setIsLocked(true);
-      if (running && !isLoser && !isWinner) {
+      if (running && !isLocked) {
+        setIsLocked(true);
         PushNotificationIOS.removePendingNotificationRequests(["loseTime"]);
         lockedTimeRef.current = Date.now(); // Store the lock time in the ref
         // Set the win time by clock as well and notify them if they reach that time
-        PushNotificationIOS.addNotificationRequest({
-          id: "winTime",
-          title: "You won!",
-          body: "Congrats on putting your phone down!",
-          fireDate: new Date(startTimeRef.current + (lockGoal * 1000)),
-        });
+        if (!isLoser && !isWinner){
+          PushNotificationIOS.addNotificationRequest({
+            id: "winTime",
+            title: "You won!",
+            body: "Congrats on putting your phone down!",
+            fireDate: new Date(startTimeRef.current + (lockGoal * 1000) + (Date.now() - (startTimeRef.current + timer * 1000))),
+          });
+        }
       }
     });
 
     const unlockListener = eventEmitter.addListener('unlock', () => {
       console.log(`Running: ${running}`);
       console.log("unlock event recieved")
-      setIsLocked(false)
-      if (running) {
+      if (running && isLocked) {
+        setIsLocked(false)
         PushNotificationIOS.removePendingNotificationRequests(["winTime"]);
         const lockedDuration = (Date.now() - lockedTimeRef.current) / 1000; // Calculate the duration using the ref
         console.log(`Locked Duration: ${lockedDuration} seconds`); 
@@ -63,9 +65,6 @@ const App = () => {
               fireDate: new Date(Date.now() + ((lockGrace * 1000) - (startTimeRef.current - Date.now() - (newTimer * 1000)))),
             });
           }
-          else {
-            setRunning(false)
-          }
           return newTimer;
         });// Use the functional update to ensure the latest timer value is used
       }
@@ -75,7 +74,7 @@ const App = () => {
       lockListener.remove();
       unlockListener.remove();
     };
-  }, [running, startTimeRef, lockGoal, lockGrace, isLoser, isWinner]);
+  }, [running, isLocked, startTimeRef, lockGoal, lockGrace, isLoser, isWinner]);
 
   useEffect(() => {
     console.log(`Timer updated to: ${timer} seconds`);
@@ -84,7 +83,8 @@ const App = () => {
   const handleStartPress = () => {
     setRunning(true);
     setIsLocked(false);
-    console.log(`Running: ${running}`)
+    setGraceTimeRemaining(lockGrace);
+    console.log(`Running: ${running}`);
     startTimeRef.current = Date.now();
     lockedTimeRef.current = Date.now();
 
@@ -98,20 +98,24 @@ const App = () => {
   };
 
   useEffect(() => {
+    setRunning(!isWinner && !isLoser && running)
+  }, [isWinner, isLoser, running]);
+
+  useEffect(() => {
     let determine_outcome_interval: any;
     if (running) {
       determine_outcome_interval = setInterval(() => {
         setIsWinner(timer >= lockGoal)
-        if (isLocked) {
-          setIsLoser(lockGrace - Math.floor((Date.now() / 1000 - (startTimeRef.current / 1000 + timer + (Date.now() - lockedTimeRef.current) / 1000))) <= 0 && timer < lockGoal)
-        }
-        else {
+        if (!isLocked) {
           setIsLoser(lockGrace - Math.floor((Date.now() / 1000 - (startTimeRef.current / 1000 + timer))) <= 0 && timer < lockGoal)
         }
-        setGraceTimeRemaining(lockGrace - Math.floor((Date.now() / 1000 - (startTimeRef.current / 1000 + timer))))
+        setGraceTimeRemaining(Math.max(0, lockGrace - Math.floor((Date.now() / 1000 - (startTimeRef.current / 1000 + timer)))))
       }, 1000);
     }
-
+    else {
+      clearInterval(determine_outcome_interval);
+      PushNotificationIOS.removePendingNotificationRequests(["loseTime", "winTime"]);
+    }
     return () => {
       if (determine_outcome_interval) {
         clearInterval(determine_outcome_interval);
@@ -141,6 +145,7 @@ const App = () => {
     setRunning(false); 
     setIsWinner(false);
     setIsLoser(false);
+    setGraceTimeRemaining(lockGrace);
     PushNotificationIOS.removeDeliveredNotifications(["winTime", "loseTime"]);
   };
 
