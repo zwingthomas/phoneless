@@ -8,19 +8,18 @@ const App = () => {
   PushNotificationIOS.requestPermissions()
 
   const [timer, setTimer] = useState(0);
-  const [secondTimer, setSecondTimer] = useState(0);
   const [winTime, setWinTime] = useState(0);
   const [loseTime, setLoseTime] = useState(0);
   const [running, setRunning] = useState(false);
   const [isLocked, setIsLocked] = useState(false);
   const lockedTimeRef = useRef(Date.now());
   const startTimeRef = useRef(Date.now())
-  const secondTimerIntervalRef = useRef<number | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [lockGoal, setLockGoal] = useState(0); // Default value for number 1
   const [lockGrace, setLockGrace] = useState(0); // Default value for number 2
   const [isWinner, setIsWinner] = useState(false);
   const [isLoser, setIsLoser] = useState(false);
+  const [graceTimeRemaining, setGraceTimeRemaining] = useState(0)
 
   useEffect(() => {
     const eventEmitter = new NativeEventEmitter(NativeModules.LockUnlockEventsEmitter);
@@ -28,28 +27,24 @@ const App = () => {
     const lockListener = eventEmitter.addListener('lock', () => {
       console.log(`Running: ${running}`);
       console.log("lock event recieved")
-      if (running) {
-        setIsLocked(true);
+      setIsLocked(true);
+      if (running && !isLoser && !isWinner) {
         PushNotificationIOS.removePendingNotificationRequests(["loseTime"]);
         lockedTimeRef.current = Date.now(); // Store the lock time in the ref
-        if (lockedTimeRef.current > startTimeRef.current + ((lockGoal) + (lockGrace)) * 1000){
-          setIsLoser(true)
-        }
-        else{
-          // Set the win time by clock as well and notify them if they reach that time
-          PushNotificationIOS.addNotificationRequest({
-            id: "winTime",
-            title: "You won!",
-            body: "Congrats on putting your phone down!",
-            fireDate: new Date(startTimeRef.current + (lockGoal * 1000)),
-          });
-        }
+        // Set the win time by clock as well and notify them if they reach that time
+        PushNotificationIOS.addNotificationRequest({
+          id: "winTime",
+          title: "You won!",
+          body: "Congrats on putting your phone down!",
+          fireDate: new Date(startTimeRef.current + (lockGoal * 1000)),
+        });
       }
     });
 
     const unlockListener = eventEmitter.addListener('unlock', () => {
       console.log(`Running: ${running}`);
       console.log("unlock event recieved")
+      setIsLocked(false)
       if (running) {
         PushNotificationIOS.removePendingNotificationRequests(["winTime"]);
         const lockedDuration = (Date.now() - lockedTimeRef.current) / 1000; // Calculate the duration using the ref
@@ -57,14 +52,7 @@ const App = () => {
         setTimer((currentTimer) => {
           const newTimer = currentTimer + lockedDuration;
           console.log(`Timer is now: ${newTimer}`);
-          if (newTimer >= (lockGoal)) {
-            setIsWinner(true)
-          }
-          else if (lockedTimeRef.current > startTimeRef.current + ((lockGoal) + (lockGrace)) * 1000){
-            setIsLoser(true)
-          }
-          else{
-            // Set the win time by clock as well and notify them if they reach that time
+          if (!isLoser && !isWinner) {
             PushNotificationIOS.addNotificationRequest({
               id: "loseTime",
               title: "You lose!",
@@ -75,6 +63,9 @@ const App = () => {
               fireDate: new Date(Date.now() + ((lockGrace * 1000) - (startTimeRef.current - Date.now() - (newTimer * 1000)))),
             });
           }
+          else {
+            setRunning(false)
+          }
           return newTimer;
         });// Use the functional update to ensure the latest timer value is used
       }
@@ -84,7 +75,7 @@ const App = () => {
       lockListener.remove();
       unlockListener.remove();
     };
-  }, [running, startTimeRef, lockGoal, lockGrace]);
+  }, [running, startTimeRef, lockGoal, lockGrace, isLoser, isWinner]);
 
   useEffect(() => {
     console.log(`Timer updated to: ${timer} seconds`);
@@ -92,36 +83,45 @@ const App = () => {
 
   const handleStartPress = () => {
     setRunning(true);
+    setIsLocked(false);
     console.log(`Running: ${running}`)
     startTimeRef.current = Date.now();
-    setSecondTimer(0); // Reset the second timer
-    // Start the second timer
-    secondTimerIntervalRef.current = setInterval(() => {
-      setSecondTimer(t =>  t + 1);
-    }, 1000) as unknown as number; // Cast to number, which is the expected type in React Native
+    lockedTimeRef.current = Date.now();
+
+    // schedule losing from unlocked notification
+    PushNotificationIOS.addNotificationRequest({
+      id: "loseTime",
+      title: "You lose!",
+      body: "Put your darn phone down!",
+      fireDate: new Date(Date.now() + ((lockGrace * 1000) - (startTimeRef.current - Date.now()))),
+    });
   };
+
+  useEffect(() => {
+    let determine_outcome_interval: any;
+    if (running) {
+      determine_outcome_interval = setInterval(() => {
+        setIsWinner(timer >= lockGoal)
+        if (isLocked) {
+          setIsLoser(lockGrace - Math.floor((Date.now() / 1000 - (startTimeRef.current / 1000 + timer + (Date.now() - lockedTimeRef.current) / 1000))) <= 0 && timer < lockGoal)
+        }
+        else {
+          setIsLoser(lockGrace - Math.floor((Date.now() / 1000 - (startTimeRef.current / 1000 + timer))) <= 0 && timer < lockGoal)
+        }
+        setGraceTimeRemaining(lockGrace - Math.floor((Date.now() / 1000 - (startTimeRef.current / 1000 + timer))))
+      }, 1000);
+    }
+
+    return () => {
+      if (determine_outcome_interval) {
+        clearInterval(determine_outcome_interval);
+      }
+    };
+  }, [running, timer, lockedTimeRef, isLocked]);
 
   useEffect(() => {
     console.log(`Running updated to: ${running}`);
   }, [running]);
-
-  useEffect(() => {
-    // Stop counting up once they win
-    return () => {
-      if (secondTimerIntervalRef.current !== null) {
-        clearInterval(secondTimerIntervalRef.current);
-      }
-    };
-  }, [isWinner]);
-
-  useEffect(() => {
-    // Clear interval on unmount or other cleanup conditions
-    return () => {
-      if (secondTimerIntervalRef.current !== null) {
-        clearInterval(secondTimerIntervalRef.current);
-      }
-    };
-  }, []);
 
   // const formatTime = (totalSeconds: number) => {
   //   const hours = Math.floor(totalSeconds / 3600);
@@ -136,21 +136,12 @@ const App = () => {
   // };
 
 
-
   const handleResetPress = () => {
-    // Reset both timers
     setTimer(0);
-    setSecondTimer(0);
     setRunning(false); 
     setIsWinner(false);
     setIsLoser(false);
-    // Show the Start button again
     PushNotificationIOS.removeDeliveredNotifications(["winTime", "loseTime"]);
-    // Clear the second timer interval if it's running
-    if (secondTimerIntervalRef.current !== null) {
-      clearInterval(secondTimerIntervalRef.current);
-      secondTimerIntervalRef.current = null;
-    }
   };
 
   return (
@@ -198,8 +189,9 @@ const App = () => {
         <Text style={styles.buttonText}>Reset</Text>
       </TouchableOpacity>
       <Text>Time Phone Was Locked: {Math.floor(timer)}</Text>
-      <Text>Second Timer: {secondTimer} seconds</Text>
-      {isWinner && <Image source={require('./winner.webp')} style={styles.winnerImage} />}
+      <Text>Grace Time Remaining: {Math.floor(graceTimeRemaining)}</Text>
+      {isLoser && <Image source={require('./loser.webp')} style={styles.resultsImage} />}
+      {isWinner && <Image source={require('./winner.webp')} style={styles.resultsImage} />}
     </SafeAreaView>
   );
 };
@@ -223,7 +215,7 @@ const styles = StyleSheet.create({
     color: 'white', // White text for better contrast
     fontSize: 20, // Larger text
   },
-  winnerImage: {
+  resultsImage: {
     width: 300, // Set the width and height according to your image
     height: 300,
     resizeMode: 'contain',
