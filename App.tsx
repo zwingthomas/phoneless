@@ -8,8 +8,6 @@ const App = () => {
   PushNotificationIOS.requestPermissions()
 
   const [timer, setTimer] = useState(0);
-  const [winTime, setWinTime] = useState(0);
-  const [loseTime, setLoseTime] = useState(0);
   const [running, setRunning] = useState(false);
   const [isLocked, setIsLocked] = useState(false);
   const lockedTimeRef = useRef(Date.now());
@@ -30,14 +28,13 @@ const App = () => {
       if (running && !isLocked) {
         setIsLocked(true);
         PushNotificationIOS.removePendingNotificationRequests(["loseTime"]);
-        lockedTimeRef.current = Date.now(); // Store the lock time in the ref
-        // Set the win time by clock as well and notify them if they reach that time
+        lockedTimeRef.current = Date.now();
         if (!isLoser && !isWinner){
           PushNotificationIOS.addNotificationRequest({
             id: "winTime",
             title: "You won!",
             body: "Congrats on putting your phone down!",
-            fireDate: new Date(startTimeRef.current + (lockGoal * 1000) + (Date.now() - (startTimeRef.current + timer * 1000))),
+            fireDate: new Date(lockGoal * 1000 - timer * 1000 + Date.now()),
           });
         }
       }
@@ -49,7 +46,7 @@ const App = () => {
       if (running && isLocked) {
         setIsLocked(false)
         PushNotificationIOS.removePendingNotificationRequests(["winTime"]);
-        const lockedDuration = (Date.now() - lockedTimeRef.current) / 1000; // Calculate the duration using the ref
+        const lockedDuration = (Date.now() - lockedTimeRef.current) / 1000;
         console.log(`Locked Duration: ${lockedDuration} seconds`); 
         setTimer((currentTimer) => {
           const newTimer = currentTimer + lockedDuration;
@@ -58,15 +55,12 @@ const App = () => {
             PushNotificationIOS.addNotificationRequest({
               id: "loseTime",
               title: "You lose!",
-              body: "Put your darn phone down!",
-              // Now + Grace time remaining
-              // Now + (lockGrace - (total time elapsed [start time - now] - total locked time elapsed))
-              //                  Now       +   total grace time  - total unlocked time  
-              fireDate: new Date(Date.now() + ((lockGrace * 1000) - (startTimeRef.current - Date.now() - (newTimer * 1000)))),
+              body: "Put your darn phone down!", 
+              fireDate: new Date(startTimeRef.current + lockGrace * 1000 + newTimer * 1000),
             });
           }
           return newTimer;
-        });// Use the functional update to ensure the latest timer value is used
+        });
       }
     });
 
@@ -85,15 +79,14 @@ const App = () => {
     setIsLocked(false);
     setGraceTimeRemaining(lockGrace);
     console.log(`Running: ${running}`);
-    startTimeRef.current = Date.now();
-    lockedTimeRef.current = Date.now();
+    startTimeRef.current = lockedTimeRef.current = Date.now();
 
     // schedule losing from unlocked notification
     PushNotificationIOS.addNotificationRequest({
       id: "loseTime",
       title: "You lose!",
       body: "Put your darn phone down!",
-      fireDate: new Date(Date.now() + ((lockGrace * 1000) - (startTimeRef.current - Date.now()))),
+      fireDate: new Date(startTimeRef.current + lockGrace * 1000),
     });
   };
 
@@ -122,23 +115,6 @@ const App = () => {
       }
     };
   }, [running, timer, lockedTimeRef, isLocked]);
-
-  useEffect(() => {
-    console.log(`Running updated to: ${running}`);
-  }, [running]);
-
-  // const formatTime = (totalSeconds: number) => {
-  //   const hours = Math.floor(totalSeconds / 3600);
-  //   const minutes = Math.floor((totalSeconds % 3600) / 60);
-  //   const seconds = totalSeconds % 60;
-
-  //   const formattedHours = String(hours).padStart(2, '0');
-  //   const formattedMinutes = String(minutes).padStart(2, '0');
-  //   const formattedSeconds = String(seconds).padStart(2, '0');
-
-  //   return `${formattedHours}:${formattedMinutes}:${formattedSeconds}`;
-  // };
-
 
   const handleResetPress = () => {
     setTimer(0);
