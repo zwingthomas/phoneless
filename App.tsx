@@ -62,7 +62,7 @@ const App = () => {
           time: Date.now(),
           eventType: 'lock'
         };
-        tracker.events.push(Date.now())
+        tracker.events.push(event)
         PushNotificationIOS.removePendingNotificationRequests(["loseTime"]);
         if (!gameState.isLoser && !gameState.isWinner){
           PushNotificationIOS.addNotificationRequest({
@@ -79,7 +79,11 @@ const App = () => {
       console.log(`Running: ${gameState.isRunning}`);
       console.log("unlock event recieved")
       if (gameState.isRunning && lastRecordIsLocked()) {
-        tracker.unlocked.push(Date.now())
+        const event: Event = {
+          time: Date.now(),
+          eventType: 'unlock'
+        };
+        tracker.events.push(event)
         PushNotificationIOS.removePendingNotificationRequests(["winTime"]);
         const lockedDuration = (Date.now() - tracker.locked[tracker.locked.length-1]) / 1000;
         console.log(`Locked Duration: ${lockedDuration} seconds`); 
@@ -102,8 +106,12 @@ const App = () => {
 
   const handleStartPress = () => {
     setGameState({ isRunning: true, isWinner: false, isLoser: false });
-    tracker.unlocked.push(Date.now())
-    console.log(tracker.unlocked)
+    const event: Event = {
+          time: Date.now(),
+          eventType: 'unlock'
+        };
+    tracker.events.push(event)
+    console.log(tracker)
     console.log(`Running: ${gameState.isRunning}`);
     setGraceRemaining(lockGrace)
     setLockTime(0)
@@ -114,7 +122,7 @@ const App = () => {
       id: "loseTime",
       title: "You lose!",
       body: "Put your darn phone down!",
-      fireDate: new Date(tracker.unlocked[0] + lockGrace),
+      fireDate: new Date(tracker.events[0].time + lockGrace),
     });
   };
 
@@ -126,7 +134,8 @@ const App = () => {
   function calculateTiming(): [boolean, number, number] {
     // locked   locked    locked  Date.now()
     // unlocked unlocked  unlocked  unlocked
-    let trackerEdited = false
+    /*
+    // let trackerEdited = false
     if (tracker.locked.length < tracker.unlocked.length) {
       tracker.locked.push(Date.now())
       trackerEdited = true
@@ -158,8 +167,37 @@ const App = () => {
     if (trackerEdited) {
       tracker.locked.pop()
     }
+    */
+    total_unlocked = 0
+    current_unlock = tracker.events[0].time 
+    current_locked = tracket.events[0].time 
 
-    return [gameover, gracetime, total_locked_time]
+    for(const event of tracker.events) {
+      switch(event.eventType) {
+        case 'unlock':
+          total_locked = event.time - current_locked
+          if (total_locked > lockGoal) {
+            gameover = True
+            break
+          }
+          current_unlock = event.time 
+        case 'lock':
+          total_unlocked = event.time - current_unlock
+          if (total_unlocked > lockGrace) {
+            gameover = True
+            break
+          }
+          current_locked = event.time
+        case 'powerup':
+          total_unlocked = total_unlocked / 2
+      }
+    }
+
+    if (tracker.events[tracket.events.length - 1].eventType !== 'locked') {
+      total_unlocked += Date.now() - current_locked
+    }
+
+    return [gameover, lockGrace - total_unlocked, total_locked_time]
   }
 
   useEffect(() => {  
