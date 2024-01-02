@@ -18,9 +18,29 @@ const App = () => {
     isWinner: boolean,
     isLoser: boolean
   }
+
+  class EventType {
+    static locked = new EventType('locked')
+    static unlocked = new EventType('unlocked')
+    static powerup = new EventType('powerup')
+    #value
+
+    constructor(value) {
+      this.#value = value
+    } 
+
+    toString() {
+      return this.#value
+    }
+  }
+
+  type Event = {
+    time: number
+    eventType: EventType
+  }
+
   type Tracker = {
-    locked: number[]
-    unlocked: number[]
+    events: Event[]
   }
 
   const [gameState, setGameState] = useState<GameState>({
@@ -28,7 +48,8 @@ const App = () => {
     isWinner: false,
     isLoser: false,
   });
-  const tracker = useRef<Tracker>({ locked: [], unlocked: [] }).current;
+
+  const tracker = useRef<Tracker>({ events: [] }).current;
 
   useEffect(() => {
     const eventEmitter = new NativeEventEmitter(NativeModules.LockUnlockEventsEmitter);
@@ -37,7 +58,11 @@ const App = () => {
       console.log(`Running: ${gameState.isRunning}`);
       console.log("lock event recieved")
       if (gameState.isRunning && !lastRecordIsLocked()) {
-        tracker.locked.push(Date.now())
+        const event: Event = {
+          time: Date.now(),
+          eventType: 'lock'
+        };
+        tracker.events.push(Date.now())
         PushNotificationIOS.removePendingNotificationRequests(["loseTime"]);
         if (!gameState.isLoser && !gameState.isWinner){
           PushNotificationIOS.addNotificationRequest({
@@ -75,10 +100,6 @@ const App = () => {
     };
   }, [gameState, lockGoal, lockGrace]);
 
-  // useEffect(() => {
-  //   console.log(`Phone has been locked for: ${lockedSeconds} seconds`);
-  // }, [lockedSeconds]);
-
   const handleStartPress = () => {
     setGameState({ isRunning: true, isWinner: false, isLoser: false });
     tracker.unlocked.push(Date.now())
@@ -98,9 +119,8 @@ const App = () => {
   };
 
   function lastRecordIsLocked(): boolean {
-    const lastLocked = tracker.locked.length > 0 ? tracker.locked[tracker.locked.length - 1] : 0
-    const lastUnlocked = tracker.unlocked[tracker.unlocked.length - 1]
-    return lastLocked > lastUnlocked
+    const lastEvent = tracker.events[tracker.events.length - 1]
+    return lastEvent.eventType === 'locked'
   }
 
   function calculateTiming(): [boolean, number, number] {
@@ -148,10 +168,7 @@ const App = () => {
       console.log("Running Interval")
       determineOutcomeInterval = setInterval(() => {
         // returns boolean for if game is over, and integer with gracetime remaining after game won, or if zero or less, then game lost
-        let ret = calculateTiming()
-        let gameover = ret[0]
-        let gracetime = ret[1]
-        setLockTime(ret[2])
+        let [gameover, gracetime, lockTime] = calculateTiming()
         // console.log(gracetime)
         if (gameover) {
             if (gracetime > 0) {
@@ -206,6 +223,7 @@ const App = () => {
         </TouchableOpacity>
       )}
 
+git clone git@github.com:zwingthomas/kickstart.nvim.git "${XDG_CONFIG_HOME:-$HOME/.config}"/nvim
       {showSettings && (
         <View style={styles.settingsDropdown}>
           <View style={styles.pickerContainer}>
