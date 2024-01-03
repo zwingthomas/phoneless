@@ -127,6 +127,9 @@ const App = () => {
   };
 
   function lastRecordIsLocked(): boolean {
+    if (tracker.events.length === 0) {
+      return false
+    }
     const lastEvent = tracker.events[tracker.events.length - 1]
     return lastEvent.eventType === 'locked'
   }
@@ -185,23 +188,26 @@ const App = () => {
       tracker.locked.pop()
     }
     */
-    total_unlocked = 0
+    gameover = false
+    total_locked_time = 0
+    total_unlocked_time = 0
     current_unlock = tracker.events[0].time 
-    current_locked = tracket.events[0].time 
+    current_locked = tracker.events[0].time 
 
     for(const event of tracker.events) {
       switch(event.eventType) {
         case 'unlock':
           total_locked_time += event.time - current_locked
           if (total_locked_time > lockGoal) {
-            gameover = True
+            console.log("HERE: " + total_locked_time)
+            gameover = true
             break
           }
           current_unlock = event.time 
         case 'lock':
           total_unlocked_time += event.time - current_unlock
           if (total_unlocked_time > lockGrace) {
-            gameover = True
+            gameover = true
             break
           }
           current_locked = event.time
@@ -210,7 +216,7 @@ const App = () => {
       }
     }
 
-    if (tracker.events[tracket.events.length - 1].eventType !== 'locked') {
+    if (tracker.events[tracker.events.length - 1].eventType === 'unlocked') {
       total_unlocked_time += Date.now() - current_locked
     }
 
@@ -251,10 +257,9 @@ const App = () => {
 
   const handleResetPress = () => {
     setGameState({ isRunning: false, isWinner: false, isLoser: false });
-    tracker.locked = []
-    tracker.unlocked = []
-    setGraceRemaining(0)
-    setLockTime(0)
+    tracker.events.length = 0;
+    setGraceRemaining(0);
+    setLockTime(0);
     PushNotificationIOS.removeDeliveredNotifications(["winTime", "loseTime"]);
   };
 
