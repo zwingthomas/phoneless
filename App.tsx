@@ -102,7 +102,7 @@ const App = () => {
       lockListener.remove();
       unlockListener.remove();
     };
-  }, [gameState, lockGoal, lockGrace]);
+  }, [gameState]);
 
   const handleStartPress = () => {
     setGameState({ isRunning: true, isWinner: false, isLoser: false });
@@ -130,6 +130,23 @@ const App = () => {
     const lastEvent = tracker.events[tracker.events.length - 1]
     return lastEvent.eventType === 'locked'
   }
+
+  function won(): [] {
+    setGameState({
+      isRunning: false,
+      isWinner: true,
+      isLoser: false
+    });
+  }
+
+  function lost(): [] {
+    setGameState({
+      isRunning: false,
+      isWinner: false,
+      isLoser: true
+    });
+  }
+
 
   function calculateTiming(): [boolean, number, number] {
     // locked   locked    locked  Date.now()
@@ -175,29 +192,29 @@ const App = () => {
     for(const event of tracker.events) {
       switch(event.eventType) {
         case 'unlock':
-          total_locked = event.time - current_locked
-          if (total_locked > lockGoal) {
+          total_locked_time += event.time - current_locked
+          if (total_locked_time > lockGoal) {
             gameover = True
             break
           }
           current_unlock = event.time 
         case 'lock':
-          total_unlocked = event.time - current_unlock
-          if (total_unlocked > lockGrace) {
+          total_unlocked_time += event.time - current_unlock
+          if (total_unlocked_time > lockGrace) {
             gameover = True
             break
           }
           current_locked = event.time
         case 'powerup':
-          total_unlocked = total_unlocked / 2
+          total_unlocked_time = total_unlocked / 2
       }
     }
 
     if (tracker.events[tracket.events.length - 1].eventType !== 'locked') {
-      total_unlocked += Date.now() - current_locked
+      total_unlocked_time += Date.now() - current_locked
     }
 
-    return [gameover, lockGrace - total_unlocked, total_locked_time]
+    return [gameover, Math.max(0, lockGrace - total_unlocked_time), total_locked_time]
   }
 
   useEffect(() => {  
@@ -210,19 +227,11 @@ const App = () => {
         // console.log(gracetime)
         if (gameover) {
             if (gracetime > 0) {
-              setGameState({
-                isRunning: false,
-                isWinner: true,
-                isLoser: false
-              });
+              won()
             }
             else {
-              setGameState({
-                isRunning: false,
-                isWinner: false,
-                isLoser: true
-              });
-              setGraceRemaining(gracetime);
+              lost()
+              setGraceRemaining(0);
             }
         }
         else {
@@ -238,7 +247,7 @@ const App = () => {
         clearInterval(determineOutcomeInterval);
       }
     };
-  }, [gameState.isRunning, lockGoal, lockGrace]);
+  }, [gameState.isRunning]);
 
   const handleResetPress = () => {
     setGameState({ isRunning: false, isWinner: false, isLoser: false });
@@ -261,7 +270,6 @@ const App = () => {
         </TouchableOpacity>
       )}
 
-git clone git@github.com:zwingthomas/kickstart.nvim.git "${XDG_CONFIG_HOME:-$HOME/.config}"/nvim
       {showSettings && (
         <View style={styles.settingsDropdown}>
           <View style={styles.pickerContainer}>
