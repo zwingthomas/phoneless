@@ -212,12 +212,15 @@ const App = () => {
           }
           current_locked = event.time
         case 'powerup':
-          total_unlocked_time = total_unlocked / 2
+          total_unlocked_time = total_unlocked_time / 2
       }
     }
 
-    if (tracker.events[tracker.events.length - 1].eventType === 'unlocked') {
+    if (!gameover && tracker.events[tracker.events.length - 1].eventType === 'unlock') {
       total_unlocked_time += Date.now() - current_locked
+      if (total_unlocked_time > lockGrace) {
+        gameover = true
+      }
     }
 
     return [gameover, Math.max(0, lockGrace - total_unlocked_time), total_locked_time]
@@ -237,7 +240,6 @@ const App = () => {
             }
             else {
               lost()
-              setGraceRemaining(0);
             }
         }
         else {
