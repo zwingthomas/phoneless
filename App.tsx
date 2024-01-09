@@ -69,7 +69,7 @@ const App = () => {
             id: "winTime",
             title: "You won!",
             body: "Congrats on putting your phone down!",
-            fireDate: new Date(lockGoal - calculateTiming()[2] + Date.now()),
+            fireDate: new Date(lockGoal - calculateTiming()[1] + Date.now()),
           });
         }
       }
@@ -92,7 +92,7 @@ const App = () => {
             id: "loseTime",
             title: "You lose!",
             body: "Put your darn phone down!", 
-            fireDate: new Date(tracker.events[0].time + lockGrace + calculateTiming()[2]),
+            fireDate: new Date(tracker.events[0].time + lockGrace + calculateTiming()[1]),
           });
         }
       }
@@ -151,47 +151,10 @@ const App = () => {
   }
 
 
-  function calculateTiming(): [boolean, number, number] {
-    // locked   locked    locked  Date.now()
-    // unlocked unlocked  unlocked  unlocked
-    /*
-    // let trackerEdited = false
-    if (tracker.locked.length < tracker.unlocked.length) {
-      tracker.locked.push(Date.now())
-      trackerEdited = true
-    }
-
-    let i = 0
-    let gameover = false
-    let gracetime = lockGrace
-    let total_locked_time = 0
-    let total_unlocked_time = 0
-    while (i < tracker.locked.length) {
-      total_unlocked_time += tracker.locked[i] - tracker.unlocked[i]
-      gracetime = lockGrace - total_unlocked_time
-      if (total_unlocked_time > lockGrace) {
-        gameover = true
-        break
-      }
-      if (i + 1 == tracker.unlocked.length){
-        break
-      }
-      total_locked_time += tracker.unlocked[i + 1] - tracker.locked[i]
-      if (total_locked_time > lockGoal) {
-        gameover = true
-        break
-      }
-      i += 1
-    }
-
-    if (trackerEdited) {
-      tracker.locked.pop()
-    }
-    */
-    gameover = false
+  function calculateTiming(): [number, number] {
+    
     total_locked_time = 0
     total_unlocked_time = 0
-    current_unlock = tracker.events[0].time 
     current_locked = tracker.events[0].time 
 
     for(const event of tracker.events) {
@@ -201,14 +164,12 @@ const App = () => {
           console.log("Total_locked_time" + total_locked_time)
           if (total_locked_time > lockGoal) {
             console.log("HERE: " + total_locked_time)
-            gameover = true
             break
           }
           current_unlock = event.time 
         case 'lock':
           total_unlocked_time += event.time - current_unlock
           if (total_unlocked_time > lockGrace) {
-            gameover = true
             break
           }
           current_locked = event.time
@@ -217,14 +178,11 @@ const App = () => {
       }
     }
 
-    if (!gameover && tracker.events[tracker.events.length - 1].eventType === 'unlock') {
+    if (tracker.events[tracker.events.length - 1].eventType === 'unlock') {
       total_unlocked_time += Date.now() - current_locked
-      if (total_unlocked_time >= lockGrace) {
-        gameover = true
-      }
     }
 
-    return [gameover, Math.max(0, lockGrace - total_unlocked_time), total_locked_time]
+    return [total_unlocked_time, total_locked_time]
   }
 
   useEffect(() => {  
@@ -233,19 +191,18 @@ const App = () => {
       console.log("Running Interval")
       determineOutcomeInterval = setInterval(() => {
         // returns boolean for if game is over, and integer with gracetime remaining after game won, or if zero or less, then game lost
-        let [gameover, gracetime, lockTime] = calculateTiming()
-        console.log("Gracetime: " + gracetime)
-        console.log("Gameover: " + gameover)
-        if (gameover && gracetime > 0) {
-            won();
-            console.log("WINNER!")
+        let [unlockedTime, lockedTime] = calculateTiming()
+        
+        if (lockedTime >= lockGoal) {
+          won();
+          console.log("WINNER!")
         }
-        else if (gameover) {
-            lost();
-            setGraceRemaining(0);
+        else if (unlockedTime > lockGrace) {
+          lost();
+          setGraceRemaining(0);
         }
         else {
-          setGraceRemaining(gracetime);
+          setGraceRemaining(lockGrace - unlockedTime);
         }
       }, 1000);
     } else {
