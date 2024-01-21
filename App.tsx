@@ -16,7 +16,8 @@ const App = () => {
   interface GameState {
     isRunning: boolean,
     isWinner: boolean,
-    isLoser: boolean
+    isLoser: boolean,
+    display: string
   }
 
   class EventType {
@@ -47,6 +48,7 @@ const App = () => {
     isRunning: false,
     isWinner: false,
     isLoser: false,
+    display: ''
   });
 
   const tracker = useRef<Tracker>({ events: [] }).current;
@@ -65,11 +67,12 @@ const App = () => {
         tracker.events.push(event)
         PushNotificationIOS.removePendingNotificationRequests(["loseTime"]);
         if (!gameState.isLoser && !gameState.isWinner){
+          let [total_unlocked_time, total_locked_time] = calculateTiming();
           PushNotificationIOS.addNotificationRequest({
             id: "winTime",
             title: "You won!",
             body: "Congrats on putting your phone down!",
-            fireDate: new Date(lockGoal - calculateTiming()[1] + Date.now()),
+            fireDate: new Date(lockGoal - total_locked_time + Date.now()),
           });
         }
       }
@@ -88,11 +91,12 @@ const App = () => {
         const lockedDuration = (Date.now() - tracker.events[tracker.length-1]) / 1000;
         console.log(`Locked Duration: ${lockedDuration} seconds`); 
         if (!gameState.isLoser && !gameState.isWinner) {
+          let [total_unlocked_time, total_locked_time] = calculateTiming();
           PushNotificationIOS.addNotificationRequest({
             id: "loseTime",
             title: "You lose!",
             body: "Put your darn phone down!", 
-            fireDate: new Date(tracker.events[0].time + lockGrace + calculateTiming()[1]),
+            fireDate: new Date(tracker.events[0].time + lockGrace + total_locked_time),
           });
         }
       }
@@ -138,7 +142,8 @@ const App = () => {
     setGameState({
       isRunning: false,
       isWinner: true,
-      isLoser: false
+      isLoser: false,
+      display: './winner.webp'
     });
   }
 
@@ -146,7 +151,8 @@ const App = () => {
     setGameState({
       isRunning: false,
       isWinner: false,
-      isLoser: true
+      isLoser: true,
+      display: './loser.webp'
     });
   }
 
@@ -155,31 +161,31 @@ const App = () => {
     
     total_locked_time = 0
     total_unlocked_time = 0
-    current_locked = tracker.events[0].time 
+    last_locked = tracker.events[0].time 
 
     for(const event of tracker.events) {
       switch(event.eventType) {
         case 'unlock':
-          total_locked_time += event.time - current_locked
+          total_locked_time += event.time - last_locked
           console.log("Total_locked_time" + total_locked_time)
           if (total_locked_time > lockGoal) {
             console.log("HERE: " + total_locked_time)
             break
           }
-          current_unlock = event.time 
+          last_unlock = event.time 
         case 'lock':
-          total_unlocked_time += event.time - current_unlock
+          total_unlocked_time += event.time - last_unlock
           if (total_unlocked_time > lockGrace) {
             break
           }
-          current_locked = event.time
+          last_locked = event.time
         case 'powerup':
           total_unlocked_time = total_unlocked_time / 2
       }
     }
 
     if (tracker.events[tracker.events.length - 1].eventType === 'unlock') {
-      total_unlocked_time += Date.now() - current_locked
+      total_unlocked_time += Date.now() - last_locked
     }
 
     return [total_unlocked_time, total_locked_time]
@@ -272,8 +278,7 @@ const App = () => {
       </TouchableOpacity>
       <Text>Time Phone Was Locked: {Math.round(lockTime / 1000)}</Text>
       <Text>Grace Time Remaining: {Math.round(Math.max(0, graceRemaining / 1000))}</Text>
-      {gameState.isLoser && <Image source={require('./loser.webp')} style={styles.resultsImage} />}
-      {gameState.isWinner && <Image source={require('./winner.webp')} style={styles.resultsImage} />}
+      {(gameState.isLoser || gameState.isWinner) && <Image source={require(gameState.display)} style={styles.resultsImage} />}
     </SafeAreaView>
   );
 };
