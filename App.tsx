@@ -12,6 +12,10 @@ const App = () => {
   const [lockGrace, setLockGrace] = useState(0); // Default value for number 2
   const [graceRemaining, setGraceRemaining] = useState(lockGrace);
   const [lockTime, setLockTime] = useState(0)
+  const images = {
+    'winner': require('./winner.webp'),
+    'loser': require('./loser.webp'),
+  };
 
   interface GameState {
     isRunning: boolean,
@@ -26,7 +30,7 @@ const App = () => {
     static powerup = new EventType('powerup')
     #value
 
-    constructor(value) {
+    constructor(value: String) {
       this.#value = value
     } 
 
@@ -48,7 +52,7 @@ const App = () => {
     isRunning: false,
     isWinner: false,
     isLoser: false,
-    display: ''
+    display: 'None'
   });
 
   const tracker = useRef<Tracker>({ events: [] }).current;
@@ -62,17 +66,16 @@ const App = () => {
       if (gameState.isRunning && !lastRecordIsLocked()) {
         let event: Event = {
           time: Date.now(),
-          eventType: 'lock'
+          eventType: EventType.locked
         };
         tracker.events.push(event)
         PushNotificationIOS.removePendingNotificationRequests(["loseTime"]);
-        if (!gameState.isLoser && !gameState.isWinner){
-          let [total_unlocked_time, total_locked_time] = calculateTiming();
+        if (gameState.isRunning){
           PushNotificationIOS.addNotificationRequest({
             id: "winTime",
             title: "You won!",
             body: "Congrats on putting your phone down!",
-            fireDate: new Date(lockGoal - total_locked_time + Date.now()),
+            fireDate: new Date(lockGoal - lockTime + Date.now()),
           });
         }
       }
@@ -84,19 +87,18 @@ const App = () => {
       if (gameState.isRunning && lastRecordIsLocked()) {
         let event: Event = {
           time: Date.now(),
-          eventType: 'unlock'
+          eventType: EventType.unlocked
         };
         tracker.events.push(event)
         PushNotificationIOS.removePendingNotificationRequests(["winTime"]);
-        const lockedDuration = (Date.now() - tracker.events[tracker.length-1]) / 1000;
+        const lockedDuration = (Date.now() - tracker.events[tracker.events.length-1].time) / 1000;
         console.log(`Locked Duration: ${lockedDuration} seconds`); 
-        if (!gameState.isLoser && !gameState.isWinner) {
-          let [total_unlocked_time, total_locked_time] = calculateTiming();
+        if (gameState.isRunning) {
           PushNotificationIOS.addNotificationRequest({
             id: "loseTime",
             title: "You lose!",
             body: "Put your darn phone down!", 
-            fireDate: new Date(tracker.events[0].time + lockGrace + total_locked_time),
+            fireDate: new Date(tracker.events[0].time + lockGrace + lockTime),
           });
         }
       }
@@ -109,10 +111,10 @@ const App = () => {
   }, [gameState]);
 
   const handleStartPress = () => {
-    setGameState({ isRunning: true, isWinner: false, isLoser: false });
+    setGameState({ isRunning: true, isWinner: false, isLoser: false, display: '' });
     const event: Event = {
           time: Date.now(),
-          eventType: 'unlock'
+          eventType: EventType.unlocked
         };
     tracker.events.push(event)
     console.log(tracker)
@@ -135,60 +137,61 @@ const App = () => {
       return false
     }
     const lastEvent = tracker.events[tracker.events.length - 1]
-    return lastEvent.eventType === 'lock'
+    return lastEvent.eventType === EventType.locked
   }
 
-  function won(): [] {
+  function won(): void {
     setGameState({
       isRunning: false,
       isWinner: true,
       isLoser: false,
-      display: './winner.webp'
+      display: 'winner'
     });
   }
 
-  function lost(): [] {
+  function lost(): void {
     setGameState({
       isRunning: false,
       isWinner: false,
       isLoser: true,
-      display: './loser.webp'
+      display: 'loser'
     });
   }
 
 
-  function calculateTiming(): [number, number] {
+  function calculateTiming(): void {
     
-    total_locked_time = 0
-    total_unlocked_time = 0
-    last_locked = tracker.events[0].time 
+    let total_locked_time = 0;
+    let total_unlocked_time = 0;
+    let last_locked = tracker.events[0].time;
+    let last_unlocked = 0;
 
     for(const event of tracker.events) {
       switch(event.eventType) {
-        case 'unlock':
+        case EventType.unlocked:
           total_locked_time += event.time - last_locked
           console.log("Total_locked_time" + total_locked_time)
           if (total_locked_time > lockGoal) {
             console.log("HERE: " + total_locked_time)
             break
           }
-          last_unlock = event.time 
-        case 'lock':
-          total_unlocked_time += event.time - last_unlock
+          last_unlocked = event.time 
+        case EventType.locked:
+          total_unlocked_time += event.time - last_unlocked
           if (total_unlocked_time > lockGrace) {
             break
           }
           last_locked = event.time
-        case 'powerup':
+        case EventType.powerup:
           total_unlocked_time = total_unlocked_time / 2
       }
     }
 
-    if (tracker.events[tracker.events.length - 1].eventType === 'unlock') {
+    if (tracker.events[tracker.events.length - 1].eventType === EventType.unlocked) {
       total_unlocked_time += Date.now() - last_locked
     }
-
-    return [total_unlocked_time, total_locked_time]
+    setLockTime(total_locked_time)
+    setGraceRemaining(lockGrace - total_unlocked_time)
   }
 
   useEffect(() => {  
@@ -197,35 +200,27 @@ const App = () => {
       console.log("Running Interval")
       determineOutcomeInterval = setInterval(() => {
         // returns boolean for if game is over, and integer with gracetime remaining after game won, or if zero or less, then game lost
-        let [unlockedTime, lockedTime] = calculateTiming()
-        
-        if (lockedTime >= lockGoal) {
+        calculateTiming();
+        console.log("LOCKED: " + lockTime);
+        if (lockTime >= lockGoal) {
           won();
           console.log("WINNER!")
         }
-        else if (unlockedTime > lockGrace) {
-          lost();
+        else if (graceRemaining <= 0) {
           setGraceRemaining(0);
-        }
-        else {
-          setGraceRemaining(lockGrace - unlockedTime);
+          lost();
         }
       }, 1000);
-    } else {
-      if (determineOutcomeInterval) {
-        clearInterval(determineOutcomeInterval);
-      }
-      PushNotificationIOS.removePendingNotificationRequests(["loseTime", "winTime"]);
     }
     return () => {
       if (determineOutcomeInterval) {
         clearInterval(determineOutcomeInterval);
       }
     };
-  }, [gameState.isRunning]);
+  }, [gameState, lockTime, graceRemaining]);
 
   const handleResetPress = () => {
-    setGameState({ isRunning: false, isWinner: false, isLoser: false });
+    setGameState({ isRunning: false, isWinner: false, isLoser: false, display: 'None'});
     tracker.events.length = 0;
     setGraceRemaining(0);
     setLockTime(0);
@@ -276,9 +271,9 @@ const App = () => {
       <TouchableOpacity style={styles.button} onPress={handleResetPress}>
         <Text style={styles.buttonText}>Reset</Text>
       </TouchableOpacity>
-      <Text>Time Phone Was Locked: {Math.round(lockTime / 1000)}</Text>
+      <Text>The Time Phone Was Locked: {Math.round(lockTime / 1000)}</Text>
       <Text>Grace Time Remaining: {Math.round(Math.max(0, graceRemaining / 1000))}</Text>
-      {(gameState.isLoser || gameState.isWinner) && <Image source={require(gameState.display)} style={styles.resultsImage} />}
+      <Image source={images[gameState.display as keyof typeof images]} style={styles.resultsImage} />
     </SafeAreaView>
   );
 };
