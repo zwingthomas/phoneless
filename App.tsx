@@ -64,28 +64,26 @@ const App = () => {
     const lockListener = eventEmitter.addListener('lock', () => {
       console.log(`Running: ${gameState.isRunning}`);
       console.log("lock event recieved")
-      if (gameState.isRunning && !lastRecordIsLocked()) {
+      if (gameState.isRunning) {
         let lockedEvent: Event = {
           time: Date.now(),
           eventType: EventType.locked
         };
         tracker.events.push(lockedEvent)
         PushNotificationIOS.removePendingNotificationRequests(["loseTime"]);
-        if (gameState.isRunning){
-          PushNotificationIOS.addNotificationRequest({
-            id: "winTime",
-            title: "You won!",
-            body: "Congrats on putting your phone down!",
-            fireDate: new Date(lockGoal - lockTime + Date.now()),
-          });
-        }
+        PushNotificationIOS.addNotificationRequest({
+          id: "winTime",
+          title: "You won!",
+          body: "Congrats on putting your phone down!",
+          fireDate: new Date(lockGoal - lockTime + Date.now()),
+        });
       }
     });
 
     const unlockListener = eventEmitter.addListener('unlock', () => {
       console.log(`Running: ${gameState.isRunning}`);
       console.log("unlock event recieved")
-      if (gameState.isRunning && lastRecordIsLocked()) {
+      if (gameState.isRunning) {
         let unlockEvent: Event = {
           time: Date.now(),
           eventType: EventType.unlocked
@@ -94,14 +92,12 @@ const App = () => {
         PushNotificationIOS.removePendingNotificationRequests(["winTime"]);
         const lockedDuration = (Date.now() - tracker.events[tracker.events.length-1].time) / 1000;
         console.log(`Locked Duration: ${lockedDuration} seconds`); 
-        if (gameState.isRunning) {
-          PushNotificationIOS.addNotificationRequest({
-            id: "loseTime",
-            title: "You lose!",
-            body: "Put your darn phone down!", 
-            fireDate: new Date(tracker.events[0].time + lockGrace + lockTime),
-          });
-        }
+        PushNotificationIOS.addNotificationRequest({
+          id: "loseTime",
+          title: "You lose!",
+          body: "Put your darn phone down!", 
+          fireDate: new Date(tracker.events[0].time + lockGrace + lockTime),
+        });
       }
     });
 
@@ -233,14 +229,16 @@ const App = () => {
     };
   }, [gameState]);
 
-  useEffect(() => {  
-    if (lockTime >= lockGoal) {
-      won();
+  useEffect(() => { 
+    if (gameState.isRunning) {
+      if (lockTime >= lockGoal) {
+        won();
+      }
+      else if (graceRemaining <= 0) {
+        lost();
+      }
     }
-    else if (graceRemaining <= 0) {
-      lost();
-    }
-  }, [lockTime, graceRemaining]);
+  }, [gameState.isRunning, lockTime, graceRemaining]);
 
 
   const handleResetPress = () => {
