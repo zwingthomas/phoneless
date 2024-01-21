@@ -172,35 +172,37 @@ const App = () => {
 
   function calculateTiming(): void {
     
+    let won = false;
     let total_locked_time = 0;
     let total_unlocked_time = 0;
     let last_locked = tracker.events[0].time;
     let last_unlocked = tracker.events[0].time;
 
     for(const event of tracker.events) {
-      console.log("EVENTS")
+      console.log("EVENTS");
       console.log("Event Type Object:", event.eventType);
       console.log("Is getValue function:", typeof event.eventType.getValue === 'function');
       if (typeof event.eventType.getValue === 'function') {
         switch(event.eventType.getValue()) {
           case EventType.unlocked.getValue():
-            total_locked_time += event.time - last_locked
-            console.log("HERE: " + total_locked_time)
-            console.log("Total_locked_time" + total_locked_time)
+            total_locked_time += event.time - last_locked;
+            console.log("HERE: " + total_locked_time);
+            console.log("Total_locked_time" + total_locked_time);
             if (total_locked_time > lockGoal) {
-              break
+              won = true;
+              break;
             }
             last_unlocked = event.time 
             break;
           case EventType.locked.getValue():
-            total_unlocked_time += event.time - last_unlocked
+            total_unlocked_time += event.time - last_unlocked;
             if (total_unlocked_time > lockGrace) {
-              break
+              break;
             }
-            last_locked = event.time
+            last_locked = event.time;
             break;
           case EventType.powerup.getValue():
-            total_unlocked_time = total_unlocked_time / 2
+            total_unlocked_time = total_unlocked_time / 2;
             break;
         }
       } else {
@@ -208,8 +210,8 @@ const App = () => {
       }
     }
 
-    if (tracker.events[tracker.events.length - 1].eventType.getValue() === EventType.unlocked.getValue()) {
-      total_unlocked_time += Date.now() - last_locked
+    if (!won && tracker.events[tracker.events.length - 1].eventType.getValue() === EventType.unlocked.getValue()) {
+      total_unlocked_time += Date.now() - tracker.events[tracker.events.length - 1].time
       console.log("HERE UNLOCKED END: " + total_unlocked_time)
     }
     setLockTime(total_locked_time)
@@ -224,17 +226,12 @@ const App = () => {
         calculateTiming();
       }, 1000);
     }
-    else {
-      if (determineOutcomeInterval) {
-        clearInterval(determineOutcomeInterval);
-      }
-    }
     return () => {
       if (determineOutcomeInterval) {
         clearInterval(determineOutcomeInterval);
       }
     };
-  }, [gameState, tracker.events]);
+  }, [gameState]);
 
   useEffect(() => {  
     if (lockTime >= lockGoal) {
