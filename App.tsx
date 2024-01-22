@@ -49,6 +49,10 @@ const App = () => {
     events: Event[]
   }
 
+  function getLastEvent(events: Event[]): Event | undefined {
+    return events.at(-1);
+  }
+
   const [gameState, setGameState] = useState<GameState>({
     isRunning: false,
     isWinner: false,
@@ -119,8 +123,11 @@ const App = () => {
         };
         tracker.events.push(unlockEvent)
         PushNotificationIOS.removePendingNotificationRequests(["winTime"]);
-        const lockedDuration = (Date.now() - tracker.events[tracker.events.length-1].time) / 1000;
-        console.log(`Locked Duration: ${lockedDuration} seconds`); 
+        let latestEvent = getLastEvent(tracker.events)
+        if (latestEvent !== undefined) {
+          const lockedDuration = (Date.now() - latestEvent.time) / 1000;
+          console.log(`Locked Duration: ${lockedDuration} seconds`);
+        }
         PushNotificationIOS.addNotificationRequest({
           id: "loseTime",
           title: "You lose!",
@@ -201,9 +208,9 @@ const App = () => {
     }
 
     // Get time from when they last unlocked their phone to now, where they are currently looking at the screen
-    if (!gameOver && tracker.events[tracker.events.length - 1].eventType.getValue() === EventType.unlocked.getValue()) {
-      total_unlocked_time += Date.now() - tracker.events[tracker.events.length - 1].time
-      console.log("HERE UNLOCKED END: " + total_unlocked_time)
+    let latestEvent = getLastEvent(tracker.events)
+    if (!gameOver && latestEvent !== undefined && latestEvent.eventType.getValue() === EventType.unlocked.getValue()) {
+      total_unlocked_time += Date.now() - latestEvent.time
     }
 
     // No return value, everything is handled by updating these two state vars.
