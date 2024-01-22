@@ -2,94 +2,19 @@ import React, { useState, useEffect, useRef } from 'react';
 import { SafeAreaView, Text, View, Image, TouchableOpacity, StyleSheet, NativeEventEmitter, NativeModules } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import PushNotificationIOS from '@react-native-community/push-notification-ios';
+import { GameState, GameStates, EventType, Event, Tracker, getLastEvent, images } from './GameStateUtils';
+
 
 const App = () => {
 
   PushNotificationIOS.requestPermissions()
-
   const [showSettings, setShowSettings] = useState(false);
   const [lockGoal, setLockGoal] = useState(0); // Default value for number 1
   const [lockGrace, setLockGrace] = useState(0); // Default value for number 2
   const [graceRemaining, setGraceRemaining] = useState(lockGrace);
   const [lockTime, setLockTime] = useState(0)
-  const images = {
-    'winner': require('./winner.webp'),
-    'loser': require('./loser.webp'),
-    'none': null
-  };
-
-  interface GameState {
-    isRunning: boolean,
-    isWinner: boolean,
-    isLoser: boolean,
-    display: string
-  }
-
-  class EventType {
-    static locked = new EventType('locked');
-    static unlocked = new EventType('unlocked');
-    static powerup = new EventType('powerup');
-    private value: string;
-
-    constructor(value: string) {
-      this.value = value;
-    }
-
-    getValue() {
-      return this.value;
-    }
-  }
-
-  type Event = {
-    time: number
-    eventType: EventType
-  }
-
-  type Tracker = {
-    events: Event[]
-  }
-
-  function getLastEvent(events: Event[]): Event | undefined {
-    return events.at(-1);
-  }
-
-  const [gameState, setGameState] = useState<GameState>({
-    isRunning: false,
-    isWinner: false,
-    isLoser: false,
-    display: 'none'
-  });
-
-  function won(): void {
-    setGameState({
-      isRunning: false,
-      isWinner: true,
-      isLoser: false,
-      display: 'winner'
-    });
-  }
-
-  function lost(): void {
-    setGraceRemaining(0);
-    setGameState({
-      isRunning: false,
-      isWinner: false,
-      isLoser: true,
-      display: 'loser'
-    });
-  }
-
-  function reset(): void {
-    setGameState({
-      isRunning: false,
-      isWinner: false,
-      isLoser: false,
-      display: 'none'
-    });
-  }
-
+  const [gameState, setGameState] = useState<GameState>(GameStates.RESET);
   const tracker = useRef<Tracker>({ events: [] }).current;
-
 
   // Track lock and unlock events using an event emitter
   useEffect(() => {
@@ -164,8 +89,8 @@ const App = () => {
   // Determines winning and losing
   useEffect(() => { 
     if (gameState.isRunning) {
-      if (lockTime >= lockGoal) { won(); }
-      else if (graceRemaining <= 0) { lost(); }
+      if (lockTime >= lockGoal) { setGameState(GameStates.WON); }
+      else if (graceRemaining <= 0) { setGraceRemaining(0); setGameState(GameStates.LOST) }
     }
   }, [gameState.isRunning, lockTime, graceRemaining]);
 
@@ -208,25 +133,25 @@ const App = () => {
     }
 
     // Get time from when they last unlocked their phone to now, where they are currently looking at the screen
-    let latestEvent = getLastEvent(tracker.events)
+    let latestEvent = getLastEvent(tracker.events);
     if (!gameOver && latestEvent !== undefined && latestEvent.eventType.getValue() === EventType.unlocked.getValue()) {
-      total_unlocked_time += Date.now() - latestEvent.time
+      total_unlocked_time += Date.now() - latestEvent.time;
     }
 
     // No return value, everything is handled by updating these two state vars.
-    setLockTime(total_locked_time)
-    setGraceRemaining(lockGrace - total_unlocked_time)
+    setLockTime(total_locked_time);
+    setGraceRemaining(lockGrace - total_unlocked_time);
   }
 
   const handleStartPress = () => {
-    setGameState({ isRunning: true, isWinner: false, isLoser: false, display: 'none' });
+    setGameState(GameStates.RUNNING);
     let initialEvent: Event = {
           time: Date.now(),
           eventType: EventType.unlocked
         };
-    tracker.events.push(initialEvent)
-    setGraceRemaining(lockGrace)
-    setLockTime(0)
+    tracker.events.push(initialEvent);
+    setGraceRemaining(lockGrace);
+    setLockTime(0);
 
     PushNotificationIOS.addNotificationRequest({
       id: "loseTime",
@@ -236,9 +161,8 @@ const App = () => {
     });
   };
 
-
   const handleResetPress = () => {
-    reset();
+    setGameState(GameStates.RESET);
     setLockTime(0);
     setGraceRemaining(0);
     tracker.events.length = 0;
