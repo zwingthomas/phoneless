@@ -1,9 +1,24 @@
+import 'react-native-get-random-values';
+import { v4 as uuidv4 } from 'uuid';
 import { Picker } from '@react-native-picker/picker';
 import React, { useState, useEffect, useRef } from 'react';
 import PushNotificationIOS from '@react-native-community/push-notification-ios';
-import { GameState, GameStates, EventType, Event, Tracker, getLastEvent, images } from './GameStateUtils';
+import { GameState, GameStates, EventType, Event, FirebaseEvent, Tracker, getLastEvent, images } from './GameStateUtils';
 import { SafeAreaView, Text, View, Image, TouchableOpacity, StyleSheet, NativeEventEmitter, NativeModules } from 'react-native';
 
+// Import the functions you need from the SDKs you need
+import { initializeApp } from "firebase/app";
+import { getAnalytics } from "firebase/analytics";
+import { getDatabase, ref, child, get, push, set } from "firebase/database";
+
+// Your web app's Firebase configuration
+const firebaseConfig = {
+  // taken out for security
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const database = getDatabase(app); // If using Realtime Database
 
 const App = () => {
 
@@ -13,7 +28,7 @@ const App = () => {
   const [lockGrace, setLockGrace] = useState(0); // Default value for number 2
   const [graceRemaining, setGraceRemaining] = useState(lockGrace);
   const [lockTime, setLockTime] = useState(0)
-  const [gameState, setGameState] = useState<GameState>(GameStates.RESET);
+  const [gameState, setGameState] = useState<GameState>(GameStates.RESET());
   const tracker = useRef<Tracker>({ events: [] }).current;
 
   // Track lock and unlock events using an event emitter
@@ -29,6 +44,7 @@ const App = () => {
           eventType: EventType.locked
         };
         tracker.events.push(lockedEvent)
+        addEventToSession(lockedEvent)
         PushNotificationIOS.removePendingNotificationRequests(["loseTime"]);
         PushNotificationIOS.addNotificationRequest({
           id: "winTime",
@@ -47,6 +63,7 @@ const App = () => {
           eventType: EventType.unlocked
         };
         tracker.events.push(unlockEvent)
+        addEventToSession(unlockEvent)
         PushNotificationIOS.removePendingNotificationRequests(["winTime"]);
         let latestEvent = getLastEvent(tracker.events)
         if (latestEvent !== undefined) {
@@ -68,6 +85,14 @@ const App = () => {
     };
   }, [gameState]);
 
+  const addEventToSession = (event: Event, explicitSessionId?: string) => {
+    const sessionId = explicitSessionId || gameState.sessionId;
+    if (sessionId) {
+      const sessionEventsRef = ref(database, 'sessions/' + sessionId + '/events');
+      const newEventRef = push(sessionEventsRef);
+      set(newEventRef, event); // Push the event to the session's events in the database
+    }
+  };
 
   // When game is running creates interval that calculates locked and unlocked time. Interval runs every second.
   useEffect(() => {  
@@ -89,15 +114,50 @@ const App = () => {
   // Determines winning and losing
   useEffect(() => { 
     if (gameState.isRunning) {
-      if (lockTime >= lockGoal) { setGameState(GameStates.WON); }
-      else if (graceRemaining <= 0) { setGraceRemaining(0); setGameState(GameStates.LOST) }
+      if (lockTime >= lockGoal) { 
+        setGameState(previousState => {
+          if (previousState.sessionId) {
+            return GameStates.WON(previousState.sessionId);
+          } else {
+            console.error('Session ID is undefined in WON state');
+            return GameStates.RESET();
+          }
+        });
+      } else if (graceRemaining <= 0) { 
+        setGameState(previousState => {
+          if (previousState.sessionId) {
+            return GameStates.LOST(previousState.sessionId);
+          } else {
+            console.error('Session ID is undefined in LOST state');
+            return GameStates.RESET();
+          }
+        });
+      }
     }
   }, [gameState.isRunning, lockTime, graceRemaining]);
 
 
   // Runs once a second when game is running, calculates time phone is locked and unlocked and updates state
-  function calculateTiming(): void {
+  const calculateTiming = async() => {
     
+    const { sessionId } = gameState;
+    if (!sessionId) return;
+
+    const sessionEventsRef = ref(database, 'sessions/' + sessionId + '/events');
+    const snapshot = await get(sessionEventsRef);
+    const firebaseEvents: FirebaseEvent[] = snapshot.val() ? Object.values(snapshot.val()) : [];
+
+    const events: Event[] = firebaseEvents.map(firebaseEvent => {
+      const eventType = new EventType(firebaseEvent.eventType.value);
+      return {
+        time: firebaseEvent.time,
+        eventType: eventType
+      };
+    });
+
+    console.log("HERE")
+    console.log(events)
+
     let gameOver = false;
     let total_locked_time = 0;
     let total_unlocked_time = 0;
@@ -106,7 +166,8 @@ const App = () => {
     // We want one of lock and one for unlock in order to not require a sequence of lock after unlock after lock after ... and delink lock and unlock from one another.
     let last_event = null;
 
-    for(const event of tracker.events) {
+    // used to be tracker.events for in memory solution
+    for(const event of events) {
       if (typeof event.eventType.getValue === 'function') {
         switch(event.eventType.getValue()) {
           case EventType.start.getValue():
@@ -151,15 +212,33 @@ const App = () => {
   }
 
   const handleStartPress = () => {
-    setGameState(GameStates.RUNNING);
+    const sessionId = uuidv4();  // Generate a unique session ID
+    setGameState(GameStates.RUNNING(sessionId));
+  
+    // Create a reference to the new session in the database
+    const sessionRef = ref(database, 'sessions/' + sessionId);
+  
+    // Set the initial data for the session
+    set(sessionRef, {
+      startTime: Date.now(),
+      events: []
+    });
+  
+    // Create the initial event
     let initialEvent: Event = {
-          time: Date.now(),
-          eventType: EventType.start
-        };
+      time: Date.now(),
+      eventType: EventType.start
+    };
+  
+    // Push the initial event onto the tracker's events
     tracker.events.push(initialEvent);
+  
+    // Use addEventToSession to push the initial event onto the session's events in the database
+    addEventToSession(initialEvent, sessionId);
+  
     setGraceRemaining(lockGrace);
     setLockTime(0);
-
+  
     PushNotificationIOS.addNotificationRequest({
       id: "loseTime",
       title: "You lose!",
@@ -169,7 +248,7 @@ const App = () => {
   };
 
   const handleResetPress = () => {
-    setGameState(GameStates.RESET);
+    setGameState(GameStates.RESET());
     setLockTime(0);
     setGraceRemaining(0);
     tracker.events.length = 0;

@@ -2,14 +2,15 @@ export interface GameState {
     isRunning: boolean,
     isWinner: boolean,
     isLoser: boolean,
-    display: string
+    display: string,
+    sessionId?: string
   }
 
 export const GameStates = {
-    RUNNING: { isRunning: true, isWinner: false, isLoser: false, display: 'none' },
-    WON: { isRunning: false, isWinner: true, isLoser: false, display: 'winner' },
-    LOST: { isRunning: false, isWinner: false, isLoser: true, display: 'loser' },
-    RESET: { isRunning: false, isWinner: false, isLoser: false, display: 'none' },
+    RUNNING: (sessionId: string) => ({ isRunning: true, isWinner: false, isLoser: false, display: 'none', sessionId: sessionId }),
+    WON: (sessionId: string) => ({ isRunning: false, isWinner: true, isLoser: false, display: 'winner', sessionId: sessionId }),
+    LOST: (sessionId: string) => ({ isRunning: false, isWinner: false, isLoser: true, display: 'loser', sessionId: sessionId }),
+    RESET: () => ({ isRunning: false, isWinner: false, isLoser: false, display: 'none', sessionId: undefined}),
 };
 
 export class EventType {
@@ -31,6 +32,13 @@ export class EventType {
 export type Event = {
     time: number
     eventType: EventType
+}
+
+export type FirebaseEvent = {
+    time: number;
+    eventType: {
+      value: string;
+    };
 }
 
 export type Tracker = {
