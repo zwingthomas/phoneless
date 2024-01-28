@@ -3,14 +3,15 @@ export interface GameState {
     isWinner: boolean,
     isLoser: boolean,
     display: string,
-    sessionId?: string
+    sessionId?: string,
+    userId?: string
   }
 
 export const GameStates = {
-    RUNNING: (sessionId: string) => ({ isRunning: true, isWinner: false, isLoser: false, display: 'none', sessionId: sessionId }),
-    WON: (sessionId: string) => ({ isRunning: false, isWinner: true, isLoser: false, display: 'winner', sessionId: sessionId }),
-    LOST: (sessionId: string) => ({ isRunning: false, isWinner: false, isLoser: true, display: 'loser', sessionId: sessionId }),
-    RESET: () => ({ isRunning: false, isWinner: false, isLoser: false, display: 'none', sessionId: undefined}),
+    RUNNING: (sessionId: string, userId: string) => ({ isRunning: true, isWinner: false, isLoser: false, display: 'none', sessionId: sessionId, userId: userId }),
+    WON: (sessionId: string, userId: string) => ({ isRunning: false, isWinner: true, isLoser: false, display: 'winner', sessionId: sessionId, userId: userId }),
+    LOST: (sessionId: string, userId: string) => ({ isRunning: false, isWinner: false, isLoser: true, display: 'loser', sessionId: sessionId, userId: userId }),
+    RESET: () => ({ isRunning: false, isWinner: false, isLoser: false, display: 'none', sessionId: undefined, userId: undefined }),
 };
 
 export class EventType {
@@ -41,6 +42,12 @@ export type FirebaseEvent = {
     };
 }
 
+export interface SessionRow {
+    sessionId: string;
+    userId: string;
+    startTime: number;
+    winner?: boolean; // assuming winner is stored and can be undefined if not yet determined
+  }
 export type Tracker = {
     events: Event[]
 }
