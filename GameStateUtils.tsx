@@ -13,6 +13,7 @@ export const GameStates = {
 };
 
 export class EventType {
+    static start = new EventType('start');
     static locked = new EventType('locked');
     static unlocked = new EventType('unlocked');
     static powerup = new EventType('powerup');

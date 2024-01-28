@@ -44,7 +44,7 @@ const App = () => {
       if (gameState.isRunning) {
         let unlockEvent: Event = {
           time: Date.now(),
-          eventType: EventType.unlocked
+          eventType: EventType.start
         };
         tracker.events.push(unlockEvent)
         PushNotificationIOS.removePendingNotificationRequests(["winTime"]);
@@ -102,23 +102,25 @@ const App = () => {
     let total_locked_time = 0;
     let total_unlocked_time = 0;
 
-    // We added an unlock event at the time we started the game, initially set these to that in order to cancel out the first event, as it had nothing before it.
+    // We added a start event at the time we started the game, initially set these to that in order to cancel out the first event, as it had nothing before it.
     // We want one of lock and one for unlock in order to not require a sequence of lock after unlock after lock after ... and delink lock and unlock from one another.
-    let last_locked = tracker.events[0].time;
-    let last_unlocked = tracker.events[0].time;
+    let last_event = tracker.events[0].time;
 
     for(const event of tracker.events) {
       if (typeof event.eventType.getValue === 'function') {
         switch(event.eventType.getValue()) {
+          case EventType.start.getValue():
+            last_event = event.time
+            break;
           case EventType.unlocked.getValue():
-            total_locked_time += event.time - last_locked;
+            total_locked_time += event.time - last_event;
             if (total_locked_time > lockGoal) { gameOver = true; }
-            last_unlocked = event.time 
+            last_event = event.time 
             break;
           case EventType.locked.getValue():
-            total_unlocked_time += event.time - last_unlocked;
+            total_unlocked_time += event.time - last_event;
             if (total_unlocked_time >= lockGrace) { gameOver = true; }
-            last_locked = event.time;
+            last_event = event.time;
             break;
           case EventType.powerup.getValue():
             total_unlocked_time = total_unlocked_time / 2;
@@ -134,7 +136,7 @@ const App = () => {
 
     // Get time from when they last unlocked their phone to now, where they are currently looking at the screen
     let latestEvent = getLastEvent(tracker.events);
-    if (!gameOver && latestEvent !== undefined && latestEvent.eventType.getValue() === EventType.unlocked.getValue()) {
+    if (!gameOver && latestEvent !== undefined && (latestEvent.eventType.getValue() === EventType.unlocked.getValue() || latestEvent.eventType.getValue() === EventType.start.getValue())) {
       total_unlocked_time += Date.now() - latestEvent.time;
     }
 
