@@ -88,7 +88,7 @@ const App = () => {
           eventType: EventType.unlocked
         };
         tracker.events.push(unlockEvent)
-        addEventToSession(unlockEvent, username)
+        addEventToSession(unlockEvent)
         PushNotificationIOS.removePendingNotificationRequests(["winTime"]);
         let latestEvent = getLastEvent(tracker.events)
         if (latestEvent !== undefined) {
@@ -110,13 +110,13 @@ const App = () => {
     };
   }, [gameState]);
 
-  const addEventToSession = (event: Event, sessionId: string) => {
-    if (sessionId && username) {
+  const addEventToSession = (event: Event) => {
+    if (gameState.sessionId && username) {
       const insertEventQuery = `INSERT INTO Events (sessionId, eventType, time) VALUES (?, ?, ?)`;
   
       if (db) {
         // Insert the event into the Events table
-        db.executeSql(insertEventQuery, [sessionId, event.eventType.getValue(), event.time], (tx: Transaction, results: ResultSet) => {
+        db.executeSql(insertEventQuery, [gameState.sessionId, event.eventType.getValue(), event.time], (tx: Transaction, results: ResultSet) => {
           console.log('Event inserted successfully');
         }, (tx: Transaction, error: any) => {
           console.error('Error inserting event:', error);
@@ -195,6 +195,7 @@ const App = () => {
           `SELECT * FROM Events WHERE sessionId = ? ORDER BY time ASC`, [sessionId],
           (tx: Transaction, results: ResultSet) => {
             const len = results.rows.length;
+            console.log(len)
             if (len > 0) {
               const events = [];
               for (let i = 0; i < len; i++) {
