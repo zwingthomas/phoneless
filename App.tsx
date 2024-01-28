@@ -52,9 +52,9 @@ const App = () => {
   const [lockGoal, setLockGoal] = useState(0); // Default value for number 1
   const [lockGrace, setLockGrace] = useState(0); // Default value for number 2
   const [graceRemaining, setGraceRemaining] = useState(lockGrace);
-  const [lockTime, setLockTime] = useState(0)
+  const [lockTime, setLockTime] = useState(0);
   const [gameState, setGameState] = useState<GameState>(GameStates.RESET());
-  const tracker = useRef<Tracker>({ events: [] }).current;
+  const startTime = useRef<number | null>(null);
 
   // Track lock and unlock events using an event emitter
   useEffect(() => {
@@ -68,8 +68,7 @@ const App = () => {
           time: Date.now(),
           eventType: EventType.locked
         };
-        tracker.events.push(lockedEvent)
-        addEventToSession(lockedEvent, username)
+        addEventToSession(lockedEvent)
         PushNotificationIOS.removePendingNotificationRequests(["loseTime"]);
         PushNotificationIOS.addNotificationRequest({
           id: "winTime",
@@ -87,20 +86,16 @@ const App = () => {
           time: Date.now(),
           eventType: EventType.unlocked
         };
-        tracker.events.push(unlockEvent)
         addEventToSession(unlockEvent)
         PushNotificationIOS.removePendingNotificationRequests(["winTime"]);
-        let latestEvent = getLastEvent(tracker.events)
-        if (latestEvent !== undefined) {
-          const lockedDuration = (Date.now() - latestEvent.time) / 1000;
-          console.log(`Locked Duration: ${lockedDuration} seconds`);
+        if (startTime.current) {
+          PushNotificationIOS.addNotificationRequest({
+            id: "loseTime",
+            title: "You lose!",
+            body: "Put your darn phone down!", 
+            fireDate: new Date(startTime.current + lockGrace + lockTime),
+          });
         }
-        PushNotificationIOS.addNotificationRequest({
-          id: "loseTime",
-          title: "You lose!",
-          body: "Put your darn phone down!", 
-          fireDate: new Date(tracker.events[0].time + lockGrace + lockTime),
-        });
       }
     });
 
@@ -269,10 +264,10 @@ const App = () => {
 
   const handleStartPress = () => {
     console.log("Game started!")
-    const sessionId = uuidv4();  // Generate a unique session ID
+    const sessionId = uuidv4();
     setGameState(GameStates.RUNNING(sessionId, username));
     
-    const startTime = Date.now();
+    startTime.current = Date.now();
   
     // Create a new session in the SQLite database
     if (db) {
@@ -280,7 +275,7 @@ const App = () => {
         // Insert the session into the Sessions table
         tx.executeSql(
           'INSERT INTO Sessions (sessionId, userId, startTime, winner) VALUES (?, ?, ?, ?)',
-          [sessionId, username, startTime, 0],
+          [sessionId, username, startTime.current, 0],
           (tx: Transaction, results: ResultSet) => {
             console.log('Session inserted successfully');
           },
@@ -292,7 +287,7 @@ const App = () => {
         // Insert the initial event into the Events table
         tx.executeSql(
           'INSERT INTO Events (sessionId, eventType, time) VALUES (?, ?, ?)',
-          [sessionId, EventType.start.getValue(), startTime],
+          [sessionId, EventType.start.getValue(), startTime.current],
           (tx: Transaction, results: ResultSet) => {
             console.log('Event inserted successfully');
           },
@@ -305,15 +300,6 @@ const App = () => {
       console.log("Database not initialized");
     }
   
-    // Create the initial event
-    let initialEvent: Event = {
-      time: Date.now(),
-      eventType: EventType.start
-    };
-  
-    // Push the initial event onto the tracker's events
-    tracker.events.push(initialEvent);
-  
     setGraceRemaining(lockGrace);
     setLockTime(0);
   
@@ -321,7 +307,7 @@ const App = () => {
       id: "loseTime",
       title: "You lose!",
       body: "Put your darn phone down!",
-      fireDate: new Date(initialEvent.time + lockGrace),
+      fireDate: new Date(startTime.current + lockGrace),
     });
   };
 
@@ -329,7 +315,7 @@ const App = () => {
     setGameState(GameStates.RESET());
     setLockTime(0);
     setGraceRemaining(0);
-    tracker.events.length = 0;
+    startTime.current = null;
     PushNotificationIOS.removeDeliveredNotifications(["winTime", "loseTime"]);
   };
 
@@ -343,15 +329,13 @@ const App = () => {
             const session = results.rows.item(i) as SessionRow;
             sessions.push(session);
           }
-    
-          // Continue with your logic...
-          // Count wins/losses
+
           const winCount = sessions.filter(session => session.winner).length;
           let lossCount = sessions.length - winCount - (gameState.isRunning ? 1 : 0);
     
-          // Set state with the win/loss counts
           setHistoryData({ winCount, lossCount });
           setShowHistory(!showHistory);
+
         }).catch((error: any) => {
           console.error('Error fetching sessions:', error);
         });
