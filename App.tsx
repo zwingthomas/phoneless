@@ -44,7 +44,7 @@ const App = () => {
       if (gameState.isRunning) {
         let unlockEvent: Event = {
           time: Date.now(),
-          eventType: EventType.start
+          eventType: EventType.unlocked
         };
         tracker.events.push(unlockEvent)
         PushNotificationIOS.removePendingNotificationRequests(["winTime"]);
@@ -104,24 +104,29 @@ const App = () => {
 
     // We added a start event at the time we started the game, initially set these to that in order to cancel out the first event, as it had nothing before it.
     // We want one of lock and one for unlock in order to not require a sequence of lock after unlock after lock after ... and delink lock and unlock from one another.
-    let last_event = tracker.events[0].time;
+    let last_event = null;
 
     for(const event of tracker.events) {
       if (typeof event.eventType.getValue === 'function') {
         switch(event.eventType.getValue()) {
           case EventType.start.getValue():
-            last_event = event.time
-            break;
-          case EventType.unlocked.getValue():
-            total_locked_time += event.time - last_event;
-            if (total_locked_time > lockGoal) { gameOver = true; }
-            last_event = event.time 
-            break;
-          case EventType.locked.getValue():
-            total_unlocked_time += event.time - last_event;
-            if (total_unlocked_time >= lockGrace) { gameOver = true; }
             last_event = event.time;
             break;
+          case EventType.unlocked.getValue():
+            if (last_event !== null) {
+              total_locked_time += event.time - last_event;
+              if (total_locked_time >= lockGoal) { gameOver = true; }
+              last_event = event.time 
+            }
+            break;
+          case EventType.locked.getValue():
+            if (last_event !== null) {
+              total_unlocked_time += event.time - last_event;
+              if (total_unlocked_time >= lockGrace) { gameOver = true; }
+              last_event = event.time;
+            }
+            break;
+          // do not add last event to anything not related to timekeeping
           case EventType.powerup.getValue():
             total_unlocked_time = total_unlocked_time / 2;
             break;
@@ -149,7 +154,7 @@ const App = () => {
     setGameState(GameStates.RUNNING);
     let initialEvent: Event = {
           time: Date.now(),
-          eventType: EventType.unlocked
+          eventType: EventType.start
         };
     tracker.events.push(initialEvent);
     setGraceRemaining(lockGrace);
@@ -159,7 +164,7 @@ const App = () => {
       id: "loseTime",
       title: "You lose!",
       body: "Put your darn phone down!",
-      fireDate: new Date(tracker.events[0].time + lockGrace),
+      fireDate: new Date(initialEvent.time + lockGrace),
     });
   };
 
