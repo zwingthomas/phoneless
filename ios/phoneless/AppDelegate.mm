@@ -30,11 +30,14 @@
 #import <React/RCTBundleURLProvider.h>
 #import <React/RCTBridge.h>
 #import <React/RCTRootView.h>
-
+#import <UIKit/UIKit.h>
+#import <FirebaseCore/FirebaseCore.h>
 @implementation AppDelegate
 
 - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions
 {
+
+
   RCTBridge *bridge = [[RCTBridge alloc] initWithDelegate:self launchOptions:launchOptions];
   RCTRootView *rootView = [[RCTRootView alloc] initWithBridge:bridge
                                                    moduleName:@"phoneless"
@@ -47,7 +50,10 @@
   rootViewController.view = rootView;
   self.window.rootViewController = rootViewController;
   [self.window makeKeyAndVisible];
+  [FIRApp configure];
   return YES;
+  
+  
 }
 
 - (NSURL *)sourceURLForBridge:(RCTBridge *)bridge
